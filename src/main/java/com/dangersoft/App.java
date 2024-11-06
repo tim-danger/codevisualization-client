@@ -10,6 +10,7 @@ import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 import java.util.zip.ZipOutputStream;
@@ -23,11 +24,14 @@ public class App
     public static void main( String[] args )
     {
         App app = new App();
-        List<DiagramInformation> result = app.readZipFile(app.resourceToFile("uml.zip").getPath(), DiagramType.PLANT_UML);
-        app.saveOutput("src/main/resources", result, true);
+        // Map<String, String> replacements = Map.of("skin rose", "skin rose\n\rskinparam handwritten true");
+        // Map<String, String> replacements = Map.of("skin rose", "skinparam monochrome true\n\rskinparam shadowing true\n\rskinparam dpi 300\n\rskinparam handwritten true");
+        Map<String, String> replacements = Map.of("skin rose", "skinparam monochrome true\n\rskinparam shadowing true");
+        List<DiagramInformation> result = app.readZipFile(app.resourceToFile("uml.zip").getPath(), DiagramType.PLANT_UML, replacements);
+        app.saveOutput("src/main/resources", result);
     }
 
-    public void saveOutput(String path, List<DiagramInformation> result, boolean asZip) {
+    public void saveOutput(String path, List<DiagramInformation> result) {
         // ZIP generieren und im vom User spezifizierten Pfad speichern
         try (FileOutputStream fos = new FileOutputStream(path + "/output.zip")) {
             fos.write(generateZipFileFromResult(result));
@@ -70,7 +74,7 @@ public class App
         }
     }
 
-    public List<DiagramInformation> readZipFile(String pathToFile, DiagramType type) {
+    public List<DiagramInformation> readZipFile(String pathToFile, DiagramType type, Map<String, String> replacements) {
         List<DiagramInformation> diagrams = new ArrayList<>();
         try (ZipInputStream zip = new ZipInputStream(new FileInputStream(pathToFile))){
             while(zip.getNextEntry() != null) {
@@ -88,7 +92,7 @@ public class App
                     diagram.setClassDiagram(false);
                     diagram.setClassName(parts[0]);
                     diagram.setMethodName(parts[1]);
-                    diagram.setCode(new String(zip.readAllBytes(), StandardCharsets.UTF_8));
+                    diagram.setCode(replacementsInCode(new String(zip.readAllBytes(), StandardCharsets.UTF_8), replacements));
                     diagrams.add(diagram);
                 }
             }
@@ -96,6 +100,13 @@ public class App
             throw new RuntimeException(e);
         }
         return diagrams;
+    }
+
+    private String replacementsInCode(String code, Map<String, String> replacements) {
+        for (Map.Entry<String, String> entry : replacements.entrySet()) {
+            code = code.replace(entry.getKey(), entry.getValue());
+        }
+        return code;
     }
 
     public File resourceToFile(String resource) {

@@ -27,11 +27,11 @@ public class App
         // Map<String, String> replacements = Map.of("skin rose", "skin rose\n\rskinparam handwritten true");
         // Map<String, String> replacements = Map.of("skin rose", "skinparam monochrome true\n\rskinparam shadowing true\n\rskinparam dpi 300\n\rskinparam handwritten true");
         Map<String, String> replacements = Map.of("skin rose", "skinparam monochrome true\n\rskinparam shadowing true");
-        List<DiagramInformation> result = app.readZipFile(app.resourceToFile("uml.zip").getPath(), DiagramType.PLANT_UML, replacements);
+        ZipOutputResult result = app.readZipFile(app.resourceToFile("uml.zip").getPath(), DiagramType.PLANT_UML, replacements);
         app.saveOutput("src/main/resources", result);
     }
 
-    public void saveOutput(String path, List<DiagramInformation> result) {
+    public void saveOutput(String path, ZipOutputResult result) {
         // ZIP generieren und im vom User spezifizierten Pfad speichern
         try (FileOutputStream fos = new FileOutputStream(path + "/output.zip")) {
             fos.write(generateZipFileFromResult(result));
@@ -40,11 +40,14 @@ public class App
         }
     }
 
-    private byte[] generateZipFileFromResult(List<DiagramInformation> result) {
+    private byte[] generateZipFileFromResult(ZipOutputResult result) {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         try(ZipOutputStream zos = new ZipOutputStream(baos)) {
-            for (DiagramInformation diagram : result) {
+            for (DiagramInformation diagram : result.getDiagrams()) {
                 tryToWriteClassAsZipEntry(zos, diagram);
+            }
+            for (Map.Entry<String, byte[]> entry : result.getFiles().entrySet()) {
+                tryToWriteClassAsZipEntry(zos, entry.getKey(), entry.getValue());
             }
         } catch(IOException ioe) {
             throw new RuntimeException("Could not generate ZIP-File");
@@ -52,8 +55,19 @@ public class App
         return baos.toByteArray();
     }
 
+    private void tryToWriteClassAsZipEntry(ZipOutputStream zos, String name, byte[] content) {
+        try {
+            ZipEntry entry = new ZipEntry(name);
+            zos.putNextEntry(entry);
+            zos.write(content);
+            zos.closeEntry();
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
     private void tryToWriteClassAsZipEntry(ZipOutputStream zos, DiagramInformation diagram) {
-        String basePath = diagram.getClassName() + "/";
+        String basePath = diagram.getClassName() != null ? diagram.getClassName() + "/" : "";
         try {
             ZipEntry entry = new ZipEntry(basePath + diagram.getMethodName() + ".svg");
             zos.putNextEntry(entry);
@@ -74,32 +88,48 @@ public class App
         }
     }
 
-    public List<DiagramInformation> readZipFile(String pathToFile, DiagramType type, Map<String, String> replacements) {
+    public ZipOutputResult readZipFile(String pathToFile, DiagramType type, Map<String, String> replacements) {
+        ZipOutputResult result = new ZipOutputResult();
         List<DiagramInformation> diagrams = new ArrayList<>();
         try (ZipInputStream zip = new ZipInputStream(new FileInputStream(pathToFile))){
-            while(zip.getNextEntry() != null) {
-                ZipEntry entry = zip.getNextEntry();
-                if (entry == null) {
-                    continue;
-                }
+            ZipEntry entry;
+            while((entry = zip.getNextEntry()) != null) {
                 String entryName = entry.getName();
-                if (!entryName.endsWith(type.getValue())) {
+                // Prüfung auf entsprechende Files
+                if (!entryName.endsWith(type.getValue()) && !fileToKeep(entryName)) {
                     continue;
                 }
                 String[] parts = entryName.split("/");
-                DiagramInformation diagram = new DiagramInformation();
-                if (parts.length > 2) {
-                    diagram.setClassDiagram(false);
-                    diagram.setClassName(parts[0]);
-                    diagram.setMethodName(parts[1]);
-                    diagram.setCode(replacementsInCode(new String(zip.readAllBytes(), StandardCharsets.UTF_8), replacements));
-                    diagrams.add(diagram);
+                if (entryName.endsWith(type.getValue())) {
+                    DiagramInformation diagram = new DiagramInformation();
+                    if (parts.length > 2) {
+                        // Sequenzdiagramm
+                        diagram.setClassDiagram(false);
+                        diagram.setClassName(parts[0]);
+                        diagram.setMethodName(parts[1]);
+                        diagram.setCode(replacementsInCode(new String(zip.readAllBytes(), StandardCharsets.UTF_8), replacements));
+                        diagrams.add(diagram);
+                    } else {
+                        // Klassendiagramm
+                        diagram.setClassDiagram(true);
+                        diagram.setMethodName("class-diagram");
+                        diagram.setCode(replacementsInCode(new String(zip.readAllBytes(), StandardCharsets.UTF_8), replacements));
+                        diagrams.add(diagram);
+                    }
+                } else {
+                    result.addFile(entryName, zip.readAllBytes());
                 }
             }
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
-        return diagrams;
+        result.setDiagrams(diagrams);
+        return result;
+    }
+
+    private boolean fileToKeep(String entryName) {
+        // Error-Log oder Complexity-Report wollen wir behalten
+        return entryName.endsWith(".txt") || entryName.endsWith(".log");
     }
 
     private String replacementsInCode(String code, Map<String, String> replacements) {

@@ -12,6 +12,9 @@ target/
 *.iml
 *.ipr
 
+### ZIP-Dateien sollen nicht eingecheckt werden können
+*.zip
+
 ### Eclipse ###
 .apt_generated
 .classpath

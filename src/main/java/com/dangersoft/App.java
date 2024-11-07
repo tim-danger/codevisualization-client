@@ -3,14 +3,13 @@ package com.dangersoft;
 import net.sourceforge.plantuml.FileFormat;
 import net.sourceforge.plantuml.FileFormatOption;
 import net.sourceforge.plantuml.SourceStringReader;
+import org.apache.commons.cli.*;
 
 import java.io.*;
 import java.net.URISyntaxException;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 import java.util.zip.ZipOutputStream;
@@ -21,14 +20,83 @@ import java.util.zip.ZipOutputStream;
  */
 public class App 
 {
-    public static void main( String[] args )
-    {
+    public static void main(String[] args) {
+        CommandLine commandLine;
+
+        // specify directory to uml.zip-file
+        Option fileOption = Option.builder()
+                .argName("directory")
+                .hasArg()
+                .desc("specify directory to uml.zip-file")
+                .option("z")
+                .longOpt("zip")
+                .build();
+
+        Option replacements = Option.builder()
+                .argName("replacements")
+                .hasArg()
+                .desc("specify replacements to be replaced as comma-separated key / value pairs like key1=value1,key2=value2")
+                .option("r")
+                .longOpt("replace")
+                .build();
+
+        Options options = new Options();
+        CommandLineParser parser = new DefaultParser();
+
+        options.addOption(fileOption);
+        options.addOption(replacements);
+
+        App app = new App();
+
+        try {
+            commandLine = parser.parse(options, args);
+
+            Map<String, String> mapWithReplacements = new HashMap<>();
+
+            String directory = "";
+            if (commandLine.hasOption(fileOption.getOpt())) {
+                directory = commandLine.getOptionValue(fileOption.getOpt());
+            } else {
+                // es muss ein Directory übergeben werden, ggf. könnte man hier das aktuelle DIR angeben
+                return;
+            }
+
+            if (commandLine.hasOption(replacements.getOpt())) {
+                app.setReplacements(mapWithReplacements, commandLine.getOptionValue(replacements.getOpt()));
+            }
+
+            app.processZip(directory, mapWithReplacements);
+
+        }
+        catch (ParseException exception) {
+            System.out.print("Parse error: ");
+            System.out.println(exception.getMessage());
+        }
+    }
+
+    private void setReplacements(Map<String, String> mapWithReplacements, String replacements) {
+        Arrays.stream(replacements.split(",")).forEach(s -> this.setKeyValuePair(mapWithReplacements, s));
+    }
+
+    private void setKeyValuePair(Map<String, String> mapWithReplacements, String value) {
+        String[] split = value.split("=");
+        if (split.length == 2) {
+            mapWithReplacements.put(split[0], split[1]);
+        }
+    }
+
+    public void testMyMethod() {
         App app = new App();
         // Map<String, String> replacements = Map.of("skin rose", "skin rose\n\rskinparam handwritten true");
         // Map<String, String> replacements = Map.of("skin rose", "skinparam monochrome true\n\rskinparam shadowing true\n\rskinparam dpi 300\n\rskinparam handwritten true");
-        Map<String, String> replacements = Map.of("skin rose", "skinparam monochrome true\n\rskinparam shadowing true");
-        ZipOutputResult result = app.readZipFile(app.resourceToFile("uml.zip").getPath(), DiagramType.PLANT_UML, replacements);
+        // Map<String, String> replacements = Map.of("skin rose", "skinparam monochrome true\n\rskinparam shadowing true");
+        ZipOutputResult result = app.readZipFile(app.resourceToFile("uml.zip").getPath(), DiagramType.PLANT_UML, Collections.emptyMap());
         app.saveOutput("src/main/resources", result);
+    }
+
+    public void processZip(String directory, Map<String, String> replacements) {
+        ZipOutputResult result = this.readZipFile(directory + "/uml.zip", DiagramType.PLANT_UML, replacements);
+        this.saveOutput(directory, result);
     }
 
     public void saveOutput(String path, ZipOutputResult result) {

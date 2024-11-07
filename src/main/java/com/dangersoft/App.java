@@ -43,6 +43,8 @@ public class App
         Options options = new Options();
         CommandLineParser parser = new DefaultParser();
 
+        // String[] testArgs = { "-z", "C:/Projekte/codevisualization-client/src/main/resources", "-r", "skin rose=skin rose\n\rskinparam handwritten true" };
+        // String[] testArgs = { "--zip", "C:/Projekte/codevisualization-client/src/main/resources", "--replace", "skin rose=skin rose\n\rskinparam handwritten true" };
         options.addOption(fileOption);
         options.addOption(replacements);
 
@@ -63,6 +65,7 @@ public class App
 
             if (commandLine.hasOption(replacements.getOpt())) {
                 app.setReplacements(mapWithReplacements, commandLine.getOptionValue(replacements.getOpt()));
+                System.out.println("Replacements: " + mapWithReplacements);
             }
 
             app.processZip(directory, mapWithReplacements);

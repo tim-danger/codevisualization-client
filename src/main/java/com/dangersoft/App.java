@@ -50,14 +50,23 @@ public class App {
                 .longOpt("check")
                 .build();
 
+        Option help = Option.builder()
+                .argName("help")
+                .desc("help")
+                .option("h")
+                .longOpt("help")
+                .build();
+
         Options options = new Options();
         CommandLineParser parser = new DefaultParser();
 
         // String[] testArgs = { "-z", "C:/Projekte/codevisualization-client/src/main/resources", "-r", "skin rose=skin rose\n\rskinparam handwritten true" };
         // String[] testArgs = { "--zip", "C:/Projekte/codevisualization-client/src/main/resources", "--replace", "skin rose=skin rose\n\rskinparam handwritten true" };
+        // String[] testArgs = { "-h" };
         options.addOption(fileOption);
         options.addOption(replacements);
         options.addOption(errorChecker);
+        options.addOption(help);
 
         App app = new App();
 
@@ -65,6 +74,12 @@ public class App {
             commandLine = parser.parse(options, args);
 
             Map<String, String> mapWithReplacements = new HashMap<>();
+
+            if (commandLine.hasOption(help.getOpt())) {
+                HelpFormatter formatter = new HelpFormatter();
+                formatter.printHelp("Code-Visualization", "+----------------------------------------------------------------------+", options, "+----------------------------------------------------------------------+", true);
+                return;
+            }
 
             String directory = "";
             if (commandLine.hasOption(fileOption.getOpt())) {

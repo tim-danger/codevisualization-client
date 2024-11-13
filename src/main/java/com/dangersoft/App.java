@@ -10,6 +10,7 @@ import java.net.URISyntaxException;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
+import java.util.stream.Collectors;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 import java.util.zip.ZipOutputStream;
@@ -18,8 +19,10 @@ import java.util.zip.ZipOutputStream;
  * Hello world!
  *
  */
-public class App 
-{
+public class App {
+
+    private List<String> errorsWhenGeneratingDiagram = new ArrayList<>();
+    private boolean checkForError = false;
     public static void main(String[] args) {
         CommandLine commandLine;
 
@@ -40,6 +43,13 @@ public class App
                 .longOpt("replace")
                 .build();
 
+        Option errorChecker = Option.builder()
+                .argName("error-checker")
+                .desc("checks if an error occurred during image processing")
+                .option("c")
+                .longOpt("check")
+                .build();
+
         Options options = new Options();
         CommandLineParser parser = new DefaultParser();
 
@@ -47,6 +57,7 @@ public class App
         // String[] testArgs = { "--zip", "C:/Projekte/codevisualization-client/src/main/resources", "--replace", "skin rose=skin rose\n\rskinparam handwritten true" };
         options.addOption(fileOption);
         options.addOption(replacements);
+        options.addOption(errorChecker);
 
         App app = new App();
 
@@ -58,6 +69,13 @@ public class App
             String directory = "";
             if (commandLine.hasOption(fileOption.getOpt())) {
                 directory = commandLine.getOptionValue(fileOption.getOpt());
+            } else {
+                // es muss ein Directory übergeben werden, ggf. könnte man hier das aktuelle DIR angeben
+                return;
+            }
+
+            if (commandLine.hasOption(errorChecker.getOpt())) {
+                app.checkForError = true;
             } else {
                 // es muss ein Directory übergeben werden, ggf. könnte man hier das aktuelle DIR angeben
                 return;
@@ -120,6 +138,9 @@ public class App
             for (Map.Entry<String, byte[]> entry : result.getFiles().entrySet()) {
                 tryToWriteClassAsZipEntry(zos, entry.getKey(), entry.getValue());
             }
+            if (checkForError && errorsWhenGeneratingDiagram.size() > 0) {
+                tryToWriteClassAsZipEntry(zos, "error.txt", errorsWhenGeneratingDiagram.stream().collect(Collectors.joining(System.lineSeparator())).getBytes(StandardCharsets.UTF_8));
+            }
         } catch(IOException ioe) {
             throw new RuntimeException("Could not generate ZIP-File");
         }
@@ -142,21 +163,29 @@ public class App
         try {
             ZipEntry entry = new ZipEntry(basePath + diagram.getMethodName() + ".svg");
             zos.putNextEntry(entry);
-            zos.write(generatePlantUmlImage(diagram.getCode()));
+            zos.write(generatePlantUmlImage(diagram.getCode(), diagram.getClassName(), diagram.getMethodName()));
             zos.closeEntry();
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
     }
 
-    private byte[] generatePlantUmlImage(String code) {
+    private byte[] generatePlantUmlImage(String code, String className, String methodName) {
         SourceStringReader reader = new SourceStringReader(code);
         try (final ByteArrayOutputStream os = new ByteArrayOutputStream()) {
             reader.generateImage(os, new FileFormatOption(FileFormat.SVG));
-            return os.toByteArray();
+            byte[] result = os.toByteArray();
+            if (this.checkForError && containsError(result)) {
+                this.errorsWhenGeneratingDiagram.add("Sequence diagram for class " + className + " method " + methodName + " contains an error!");
+            }
+            return result;
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
+    }
+
+    private boolean containsError(byte[] result) {
+        return new String(result, StandardCharsets.UTF_8).contains("Syntax Error?");
     }
 
     public ZipOutputResult readZipFile(String pathToFile, DiagramType type, Map<String, String> replacements) {

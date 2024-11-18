@@ -21,7 +21,7 @@ import java.util.zip.ZipOutputStream;
  */
 public class App {
 
-    private List<String> errorsWhenGeneratingDiagram = new ArrayList<>();
+    private final List<String> errorsWhenGeneratingDiagram = new ArrayList<>();
     private boolean checkForError = false;
     public static void main(String[] args) {
         CommandLine commandLine;
@@ -81,7 +81,7 @@ public class App {
                 return;
             }
 
-            String directory = "";
+            String directory;
             if (commandLine.hasOption(fileOption.getOpt())) {
                 directory = commandLine.getOptionValue(fileOption.getOpt());
             } else {
@@ -153,7 +153,7 @@ public class App {
             for (Map.Entry<String, byte[]> entry : result.getFiles().entrySet()) {
                 tryToWriteClassAsZipEntry(zos, entry.getKey(), entry.getValue());
             }
-            if (checkForError && errorsWhenGeneratingDiagram.size() > 0) {
+            if (checkForError && !errorsWhenGeneratingDiagram.isEmpty()) {
                 tryToWriteClassAsZipEntry(zos, "error.txt", errorsWhenGeneratingDiagram.stream().collect(Collectors.joining(System.lineSeparator())).getBytes(StandardCharsets.UTF_8));
             }
         } catch(IOException ioe) {
@@ -176,11 +176,16 @@ public class App {
     private void tryToWriteClassAsZipEntry(ZipOutputStream zos, DiagramInformation diagram) {
         String basePath = diagram.getClassName() != null ? diagram.getClassName() + "/" : "";
         try {
+            byte[] result = generatePlantUmlImage(diagram.getCode(), diagram.getClassName(), diagram.getMethodName());
+            // Fehler
+            if (result == null) {
+                return;
+            }
             ZipEntry entry = new ZipEntry(basePath + diagram.getMethodName() + ".svg");
             zos.putNextEntry(entry);
-            zos.write(generatePlantUmlImage(diagram.getCode(), diagram.getClassName(), diagram.getMethodName()));
+            zos.write(result);
             zos.closeEntry();
-        } catch (IOException e) {
+        } catch (Exception e) {
             throw new RuntimeException(e);
         }
     }
@@ -194,8 +199,9 @@ public class App {
                 this.errorsWhenGeneratingDiagram.add("Sequence diagram for class " + className + " method " + methodName + " contains an error!");
             }
             return result;
-        } catch (IOException e) {
-            throw new RuntimeException(e);
+        } catch (Exception e) {
+            System.err.println("Problem occurred for method " + methodName + " in class " + className + ", error: " + e.getMessage());
+            return null;
         }
     }
 

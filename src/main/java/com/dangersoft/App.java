@@ -214,6 +214,7 @@ public class App {
         List<DiagramInformation> diagrams = new ArrayList<>();
         try (ZipInputStream zip = new ZipInputStream(new FileInputStream(pathToFile))){
             ZipEntry entry;
+            int counter = 0;
             while((entry = zip.getNextEntry()) != null) {
                 String entryName = entry.getName();
                 // Prüfung auf entsprechende Files
@@ -233,7 +234,8 @@ public class App {
                     } else {
                         // Klassendiagramm
                         diagram.setClassDiagram(true);
-                        diagram.setMethodName("class-diagram");
+                        diagram.setMethodName("class-diagram" + counter);
+                        counter++;
                         diagram.setCode(replacementsInCode(new String(zip.readAllBytes(), StandardCharsets.UTF_8), replacements));
                         diagrams.add(diagram);
                     }
